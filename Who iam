@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Who I'am? - Detailed Feathers</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: "Arial Black", "Impact", sans-serif;
+        }
+
+        #start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: opacity 1s ease;
+        }
+
+        #start-btn {
+            background: transparent;
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 20px 40px;
+            font-size: 2.5rem;
+            font-family: inherit;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        #start-btn:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px rgba(255,255,255,0.8);
+            transform: scale(1.05);
+        }
+
+        .canvas-container {
+            position: relative;
+            box-shadow: 0 0 100px rgba(255, 255, 255, 0.1);
+            border: 4px solid #1a1a1a;
+            background-color: #050505;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #flash-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff;
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.05s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <button id="start-btn">who i'am</button>
+        <p style="color: #666; margin-top: 20px; font-size: 0.8rem; letter-spacing: 3px;">TURN SOUND ON</p>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="canvas-bg"></canvas>
+        <div id="flash-overlay"></div>
+    </div>
+
+    <script>
+        // --- IMAGE HANDLING ---
+        const eyeImg = new Image();
+        eyeImg.crossOrigin = "Anonymous";
+        eyeImg.src = 'https://images.genius.com/8c6d20530b83b619ee39205c324353fe.652x652x1.png'
+        let imageLoaded = false;
+        eyeImg.onload = () => { imageLoaded = true; };
+        eyeImg.onerror = () => { console.warn("Gambar gagal dimuat, menggunakan fallback prosedural."); };
+
+        // --- AUDIO SYSTEM ---
+        const AudioSys = {
+            ctx: null,
+            isInit: false,
+
+            init: function() {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.isInit = true;
+                this.startDrone(); 
+            },
+
+            startDrone: function() {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(40, this.ctx.currentTime); 
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(150, this.ctx.currentTime);
+                
+                const lfo = this.ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.setValueAtTime(0.15, this.ctx.currentTime);
+                const lfoGain = this.ctx.createGain();
+                lfoGain.gain.setValueAtTime(50, this.ctx.currentTime);
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(filter.frequency);
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                osc.start();
+                lfo.start();
+            },
+
+            playAngelSound: function() {
+                const t = this.ctx.currentTime;
+                const freqs = [261.63, 329.63, 392.00]; 
+                
+                freqs.forEach(f => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, t);
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.1, t + 1); 
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 4); 
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 5);
+                });
+            },
+
+            playGunshot: function() {
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const oscGain = this.ctx.createGain();
+                osc.frequency.setValueAtTime(150, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+                oscGain.gain.setValueAtTime(1, t);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                osc.connect(oscGain);
+                oscGain.connect(this.ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.2);
+
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000, t);
+                filter.frequency.linearRampToValueAtTime(100, t + 0.3); 
+                noiseGain.gain.setValueAtTime(0.8, t);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(this.ctx.destination);
+                noise.start(t);
+            }
+        };
+
+        // --- VISUAL SYSTEM ---
+        const canvas = document.getElementById('canvas-bg');
+        const ctx = canvas.getContext('2d');
+        const container = document.querySelector('.canvas-container');
+        const flashOverlay = document.getElementById('flash-overlay');
+
+        const TARGET_ASPECT = 9 / 16;
+        const FONT_FAMILY = '"Arial Black", "Impact", sans-serif';
+        const SIZE_SMALL = 16;
+        const SIZE_MED = 40;
+        const SIZE_LARGE = 90;
+        const SPEED = 0.5; 
+
+        let rows = [];
+        let canvasWidth, canvasHeight;
+        let shakeX = 0, shakeY = 0;
+
+        const CYCLE_DURATION = 9000; 
+        const DESCEND_DURATION = 5000; 
+        const SHOT_TIME = 5000; 
+        const FALL_DURATION = 4000; 
+
+        let animationStartTime = 0;
+        let hasPlayedAngelSound = false;
+        let hasPlayedGunSound = false;
+
+        // Partikel !? 
+        const particles = [];
+        for(let i=0; i<10; i++) {
+            particles.push({
+                angle: (i / 10) * Math.PI * 2,
+                speed: 0.015 + Math.random() * 0.01,
+                radius: 120 + Math.random() * 60,
+                text: Math.random() > 0.5 ? "!" : "?",
+                yOffset: Math.random() * 30,
+                danceSpeed: 0.05 + Math.random() * 0.05,
+                danceOffset: Math.random() * 100
+            });
+        }
+
+        // --- PROCEDURAL FEATHER DRAWING SYSTEM ---
+        // Menggambar satu bentuk bulu
+        function drawFeather(ctx, length, width, color, opacity) {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = opacity;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            // Sisi kiri bulu
+            ctx.quadraticCurveTo(width / 2, -length / 2, 0, -length);
+            // Ujung bulu
+            ctx.quadraticCurveTo(-width / 2, -length / 2, 0, 0);
+            ctx.fill();
+        }
+
+        // Menggambar satu sisi sayap dengan banyak bulu
+        function drawWingLayer(ctx, side, layers, scale, flapFactor, color, opacityBase) {
+            // side: 1 (kanan), -1 (kiri)
+            for (let i = 0; i < layers; i++) {
+                ctx.save();
+                // Rotasi dasar menyebar
+                const angle = (i / layers) * Math.PI * 0.8 + (Math.PI / 2) + (side === 1 ? 0.2 : -0.2);
+                const distance = 40 + (i * 15); // Jarak dari tengah
+                
+                // Terapkan gerakan mengepak
+                // Bulu luar mengepak lebih besar amplitude-nya
+                const flapAmount = Math.sin(Date.now() * 0.01 + i) * (0.2 * flapFactor * (i/layers));
+                
+                ctx.rotate(angle + (side * flapAmount));
+                ctx.translate(0, -distance);
+                
+                // Skala bulu berdasarkan posisi (luar lebih besar)
+                const featherScale = scale * (0.5 + (i / layers));
+                
+                // Gambar bulu
+                drawFeather(ctx, 60 * featherScale, 15 * featherScale, color, opacityBase * (1 - (i/layers)*0.3));
+                
+                ctx.restore();
+            }
+        }
+
+        // Menggambar Bulu Mata (Eyelashes)
+        function drawEyeLashes(ctx, scale, blinkScale) {
+            const count = 24;
+            const radius = 55 * scale;
+            for(let i=0; i<count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                ctx.save();
+                ctx.rotate(angle);
+                
+                // Efek kedip mempengaruhi tinggi bulu mata
+                const lashLen = (20 + Math.random()*10) * scale * blinkScale;
+                
+                ctx.beginPath();
+                ctx.moveTo(radius, 0);
+                ctx.quadraticCurveTo(radius + lashLen, -5 * scale, radius + lashLen + 10, 0);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2 * scale;
+                ctx.globalAlpha = 0.8;
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function resizeCanvas() {
+            const windowW = window.innerWidth;
+            const windowH = window.innerHeight;
+            let w, h;
+
+            if (windowW / windowH > TARGET_ASPECT) {
+                h = windowH * 0.95;
+                w = h * TARGET_ASPECT;
+            } else {
+                w = windowW * 0.95;
+                h = w / TARGET_ASPECT;
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            canvasWidth = w;
+            canvasHeight = h;
+
+            container.style.width = `${w}px`;
+            container.style.height = `${h}px`;
+
+            initRows();
+        }
+
+        // --- TEXT LOGIC ---
+        class TextRow {
+            constructor(y, rowHeight) {
+                this.y = y;
+                this.rowHeight = rowHeight;
+                this.items = [];
+                this.currentX = 0;
+                this.isInitialized = false;
+            }
+
+            addText() {
+                const rSize = Math.random();
+                let fontSize = SIZE_MED;
+                if (rSize < 0.10) fontSize = SIZE_SMALL;
+                else if (rSize < 0.35) fontSize = SIZE_LARGE;
+
+                const rContent = Math.random();
+                let text = "";
+                if (rContent < 0.70) text = "who i'am?? "; 
+                else if (rContent < 0.85) text = "FALSA "; 
+                else text = "i love u "; 
+
+                ctx.font = `900 ${fontSize}px ${FONT_FAMILY}`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+
+                const width = ctx.measureText(text).width;
+                this.items.push({ text: text, width: width, x: this.currentX, size: fontSize });
+                this.currentX += width;
+            }
+
+            updateAndDraw() {
+                if (!this.isInitialized) {
+                    while (this.currentX < canvasWidth) this.addText();
+                    for(let i=0; i<15; i++) this.addText(); 
+                    this.isInitialized = true;
+                }
+
+                for (let i = 0; i < this.items.length; i++) {
+                    let item = this.items[i];
+                    item.x -= SPEED;
+
+                    ctx.font = `900 ${item.size}px ${FONT_FAMILY}`;
+                    
+                    if (Math.random() > 0.8 && shakeY > 5) {
+                        ctx.fillStyle = '#ff0000'; 
+                    } else {
+                        ctx.fillStyle = '#ffffff';
+                    }
+
+                    ctx.fillText(item.text, item.x + shakeX, this.y + (this.rowHeight / 2) + shakeY);
+                }
+
+                if (this.items.length > 0 && this.items[0].x + this.items[0].width < -50) this.items.shift();
+
+                const lastItem = this.items[this.items.length - 1];
+                if (lastItem.x + lastItem.width < canvasWidth + 100) this.addText();
+            }
+        }
+
+        function initRows() {
+            rows = [];
+            const rowHeight = SIZE_LARGE * 1.3; 
+            const totalRows = Math.ceil(canvasHeight / rowHeight);
+            const totalContentHeight = totalRows * rowHeight;
+            const startY = (canvasHeight - totalContentHeight) / 2;
+            for (let i = 0; i < totalRows; i++) rows.push(new TextRow(startY + (i * rowHeight), rowHeight));
+        }
+
+        // --- UPDATED ANIMATION LOGIC WITH DETAILED FEATHERS ---
+        function updateAndDrawAngel() {
+            const now = performance.now();
+            const elapsed = now - animationStartTime;
+            const cycleTime = elapsed % CYCLE_DURATION;
+
+            let yPos = -200; 
+            let scale = 0.5;
+            let opacity = 0;
+            let rotation = 0;
+            let wingFlap = 1;
+            let colorFilter = 'none';
+            let isDead = false;
+            let eyeBlinkScale = 1; 
+
+            if (cycleTime < 100) {
+                hasPlayedAngelSound = false;
+                hasPlayedGunSound = false;
+                flashOverlay.style.opacity = 0;
+                shakeX = 0; 
+                shakeY = 0;
+            }
+
+            if (cycleTime < DESCEND_DURATION) {
+                if (!hasPlayedAngelSound) {
+                    AudioSys.playAngelSound();
+                    hasPlayedAngelSound = true;
+                }
+
+                const progress = cycleTime / DESCEND_DURATION;
+                const ease = 1 - Math.pow(1 - progress, 3);
+
+                yPos = -200 + (ease * (canvasHeight * 0.4 + 200));
+                scale = 0.5 + (ease * 0.5); 
+                opacity = 1;
+
+                // Mengepak Gencar (0.03 speed, 0.25 amp)
+                wingFlap = Math.sin(cycleTime * 0.03) * 0.25;
+
+                // Berkedip
+                const blinkTrigger = Math.sin(cycleTime * 0.005) + Math.random() * 0.5;
+                if (blinkTrigger > 1.3) eyeBlinkScale = 0.2; 
+                else eyeBlinkScale = 1;
+
+            } else {
+                const fallTime = cycleTime - DESCEND_DURATION;
+                const fallProgress = fallTime / FALL_DURATION;
+
+                if (!hasPlayedGunSound) {
+                    AudioSys.playGunshot();
+                    hasPlayedGunSound = true;
+                    flashOverlay.style.opacity = 1; 
+                    setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
+                }
+
+                if (fallProgress < 0.2) {
+                    ctx.fillStyle = `rgba(255, 0, 0, ${0.5 - (fallProgress*2.5)})`;
+                    ctx.fillRect(0,0,canvasWidth, canvasHeight);
+                }
+
+                isDead = true;
+                yPos = (canvasHeight * 0.4) + (Math.pow(fallProgress, 2) * canvasHeight * 1.5);
+                rotation = fallProgress * Math.PI * 2; 
+                scale = 1.0 - (fallProgress * 0.5);
+                opacity = 1 - fallProgress;
+                
+                colorFilter = `sepia(1) hue-rotate(-50deg) saturate(5) contrast(1.5)`;
+                eyeBlinkScale = 1; // Mata terbuka lebar saat ditembak
+
+                shakeX = (Math.random() - 0.5) * 30;
+                shakeY = (Math.random() - 0.5) * 30;
+            }
+
+            if (opacity > 0) {
+                ctx.save();
+                
+                const centerX = canvasWidth / 2;
+                const floatY = isDead ? 0 : Math.sin(cycleTime * 0.003) * 5;
+                const drawY = yPos + floatY;
+
+                ctx.translate(centerX + shakeX, drawY + shakeY);
+                ctx.rotate(rotation);
+                ctx.scale(scale, scale); 
+                
+                ctx.filter = colorFilter;
+                ctx.globalAlpha = opacity;
+
+                // --- 1. GAMBAR SAYAP BELAKANG (Besar, Pudar) ---
+                drawWingLayer(ctx, 1, 15, 1.2, wingFlap, '#ffffff', 0.1); // Kanan
+                drawWingLayer(ctx, -1, 15, 1.2, wingFlap, '#ffffff', 0.1); // Kiri
+
+                // --- 2. GAMBAR GAMBAR UTAMA (Mata) ---
+                if (imageLoaded) {
+                    const baseSize = 250; 
+                    const aspect = eyeImg.width / eyeImg.height;
+                    const drawW = baseSize;
+                    const drawH = baseSize / aspect;
+                    
+                    ctx.save();
+                    ctx.scale(1, eyeBlinkScale); // Terapkan kedipan pada gambar
+                    ctx.drawImage(eyeImg, -drawW/2, -drawH/2, drawW, drawH);
+                    ctx.restore();
+                } else {
+                    // Fallback
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.arc(0,0,50,0,Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill();
+                }
+
+                // --- 3. GAMBAR SAYAP TENGAH & DEPAN (Detail Tambahan) ---
+                // Lapisan tengah: lebih solid
+                drawWingLayer(ctx, 1, 10, 0.8, wingFlap, '#e0e0e0', 0.3);
+                drawWingLayer(ctx, -1, 10, 0.8, wingFlap, '#e0e0e0', 0.3);
+
+                // --- 4. GAMBAR BULU MATA (Eyelashes) ---
+                // Bulu-bulu tajam mengelilingi mata
+                drawEyeLashes(ctx, 1.0, eyeBlinkScale);
+
+                // --- 5. GAMBAR BULU HALUS DEPAN (Detail Terakhir) ---
+                // Bulu-bulu kecil bergerak cepat di depan
+                drawWingLayer(ctx, 1, 8, 0.5, wingFlap * 1.5, '#ffffff', 0.2);
+                drawWingLayer(ctx, -1, 8, 0.5, wingFlap * 1.5, '#ffffff', 0.2);
+
+                ctx.restore();
+
+                // --- DRAW DANCING PARTICLES ---
+                if (!isDead || fallProgress < 0.3) {
+                    ctx.save();
+                    ctx.translate(centerX + shakeX, drawY + shakeY); 
+                    
+                    particles.forEach(p => {
+                        p.angle += p.speed;
+                        const danceX = Math.sin(cycleTime * p.danceSpeed + p.danceOffset) * 20;
+                        const danceY = Math.cos(cycleTime * p.danceSpeed * 1.5 + p.danceOffset) * 20;
+
+                        const px = Math.cos(p.angle) * p.radius + danceX;
+                        const py = Math.sin(p.angle) * p.radius + p.yOffset + danceY;
+
+                        ctx.font = `bold 24px ${FONT_FAMILY}`;
+                        ctx.fillStyle = isDead ? '#fff' : '#ff0000'; 
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        const symbolBlink = Math.sin(cycleTime * 0.02 + p.danceOffset) > 0;
+                        ctx.globalAlpha = symbolBlink ? 1 : 0.3;
+                        ctx.fillText(p.text, px, py);
+                    });
+                    ctx.restore();
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            rows.forEach(row => row.updateAndDraw());
+            updateAndDrawAngel();
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            const overlay = document.getElementById('start-overlay');
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.style.display = 'none', 1000);
+
+            AudioSys.init();
+            animationStartTime = performance.now();
+            animate();
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+    </script>
+</body>
+</html>
